@@ -1,0 +1,388 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── USER & AUTH ──────────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  password      String    // bcrypt hashed
+  phone         String?
+  role          Role      @default(EMPLOYEE)
+  avatar        String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  employee      Employee?
+  sessions      Session[]
+}
+
+enum Role {
+  CANDIDATE
+  EMPLOYEE
+  HR
+  ADMIN
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ── EMPLOYEE ─────────────────────────────────────────────────────────────────
+
+model Employee {
+  id           String       @id @default(cuid())
+  empId        String       @unique  // YAI-001 format
+  userId       String       @unique
+  department   Department
+  designation  String
+  salary       Float
+  joinedAt     DateTime
+  status       EmpStatus    @default(ACTIVE)
+  bankAccount  String?
+  pfNumber     String?
+  esiNumber    String?
+  pan          String?
+  aadhar       String?
+  address      String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id])
+  attendance   Attendance[]
+  payslips     Payslip[]
+  leaveReqs    LeaveRequest[]
+  letters      Letter[]
+  performance  Performance[]
+  enrollment   CourseEnrollment[]
+  placement    PlacementRecord?
+}
+
+enum Department {
+  ENGINEERING
+  HR
+  TRAINING
+  PLACEMENT
+  MANAGEMENT
+  DATA_ENGINEERING
+  DEVOPS
+  DESIGN
+}
+
+enum EmpStatus {
+  ACTIVE
+  PROBATION
+  NOTICE_PERIOD
+  RESIGNED
+  TERMINATED
+}
+
+// ── ATTENDANCE ───────────────────────────────────────────────────────────────
+
+model Attendance {
+  id          String   @id @default(cuid())
+  employeeId  String
+  date        DateTime @db.Date
+  checkIn     DateTime?
+  checkOut    DateTime?
+  status      AttStatus
+  hoursWorked Float?
+  notes       String?
+
+  employee    Employee @relation(fields: [employeeId], references: [id])
+
+  @@unique([employeeId, date])
+}
+
+enum AttStatus {
+  PRESENT
+  ABSENT
+  LEAVE
+  HALF_DAY
+  WFH
+  HOLIDAY
+  WEEKEND
+}
+
+// ── PAYROLL & PAYSLIP ────────────────────────────────────────────────────────
+
+model Payslip {
+  id              String      @id @default(cuid())
+  employeeId      String
+  month           Int         // 1-12
+  year            Int
+  basicSalary     Float
+  hra             Float
+  transportAll    Float
+  medicalAll      Float
+  perfBonus       Float
+  otherEarnings   Float       @default(0)
+  pfDeduction     Float
+  esiDeduction    Float
+  profTax         Float
+  tdsDeduction    Float
+  otherDeductions Float       @default(0)
+  grossEarnings   Float       // computed
+  totalDeductions Float       // computed
+  netPay          Float       // computed
+  status          PayStatus   @default(DRAFT)
+  generatedAt     DateTime    @default(now())
+  approvedAt      DateTime?
+  approvedBy      String?
+  pdfUrl          String?
+
+  employee        Employee    @relation(fields: [employeeId], references: [id])
+
+  @@unique([employeeId, month, year])
+}
+
+enum PayStatus {
+  DRAFT
+  GENERATED
+  APPROVED
+  DISBURSED
+}
+
+// ── LETTERS & DOCUMENTS ──────────────────────────────────────────────────────
+
+model Letter {
+  id            String      @id @default(cuid())
+  employeeId    String
+  type          LetterType
+  designation   String
+  department    String
+  salary        Float?
+  joiningDate   DateTime?
+  content       String      @db.Text  // generated letter text
+  pdfUrl        String?
+  issuedAt      DateTime    @default(now())
+  issuedBy      String
+
+  employee      Employee    @relation(fields: [employeeId], references: [id])
+}
+
+enum LetterType {
+  OFFER
+  APPOINTMENT
+  EXPERIENCE
+  RELIEVING
+  SALARY_CERTIFICATE
+  INTERNSHIP
+  PROMOTION
+  TRANSFER
+  WARNING
+}
+
+// ── LEAVE MANAGEMENT ─────────────────────────────────────────────────────────
+
+model LeaveRequest {
+  id          String       @id @default(cuid())
+  employeeId  String
+  type        LeaveType
+  fromDate    DateTime     @db.Date
+  toDate      DateTime     @db.Date
+  days        Int
+  reason      String
+  status      LeaveStatus  @default(PENDING)
+  approvedBy  String?
+  approvedAt  DateTime?
+  rejectedBy  String?
+  rejectedAt  DateTime?
+  comments    String?
+  createdAt   DateTime     @default(now())
+
+  employee    Employee     @relation(fields: [employeeId], references: [id])
+}
+
+enum LeaveType {
+  CASUAL
+  SICK
+  ANNUAL
+  WFH
+  MATERNITY
+  PATERNITY
+  COMPENSATORY
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model LeaveBalance {
+  id         String    @id @default(cuid())
+  employeeId String    @unique
+  casual     Int       @default(10)
+  sick       Int       @default(7)
+  annual     Int       @default(20)
+  wfh        Int       @default(5)
+  year       Int
+}
+
+// ── RECRUITMENT ──────────────────────────────────────────────────────────────
+
+model JobPosting {
+  id           String      @id @default(cuid())
+  title        String
+  department   Department
+  openings     Int
+  description  String      @db.Text
+  requirements String?
+  status       JobStatus   @default(ACTIVE)
+  postedBy     String
+  postedAt     DateTime    @default(now())
+  closedAt     DateTime?
+
+  applications Application[]
+}
+
+enum JobStatus {
+  ACTIVE
+  PAUSED
+  CLOSED
+  FILLED
+}
+
+model Application {
+  id          String      @id @default(cuid())
+  jobId       String
+  candidateName String
+  email       String
+  phone       String?
+  resumeUrl   String?
+  stage       AppStage    @default(APPLIED)
+  score       Float?
+  notes       String?
+  appliedAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  job         JobPosting  @relation(fields: [jobId], references: [id])
+}
+
+enum AppStage {
+  APPLIED
+  SHORTLISTED
+  WRITTEN_TEST
+  TECHNICAL_INTERVIEW
+  HR_ROUND
+  OFFER_SENT
+  JOINED
+  REJECTED
+}
+
+// ── TRAINING & COURSES ───────────────────────────────────────────────────────
+
+model Course {
+  id           String     @id @default(cuid())
+  name         String
+  description  String?    @db.Text
+  duration     String     // e.g., "3 months"
+  techStack    String[]   // e.g., ["Next.js", "React", "Node.js"]
+  isFeatured   Boolean    @default(false)  // Snowflake is featured/booming
+  price        Float?
+  batchCode    String     @unique
+  startDate    DateTime?
+  endDate      DateTime?
+  instructor   String?
+  maxStudents  Int        @default(30)
+  status       CourseStatus @default(UPCOMING)
+  color        String     @default("#0078d4")
+  progress     Int        @default(0)  // 0-100
+  createdAt    DateTime   @default(now())
+
+  enrollments  CourseEnrollment[]
+}
+
+enum CourseStatus {
+  UPCOMING
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+model CourseEnrollment {
+  id           String   @id @default(cuid())
+  courseId     String
+  employeeId   String
+  enrolledAt   DateTime @default(now())
+  completedAt  DateTime?
+  progress     Int      @default(0)
+  certificate  String?
+
+  course       Course   @relation(fields: [courseId], references: [id])
+  employee     Employee @relation(fields: [employeeId], references: [id])
+
+  @@unique([courseId, employeeId])
+}
+
+// ── PLACEMENT ────────────────────────────────────────────────────────────────
+
+model PlacementRecord {
+  id           String   @id @default(cuid())
+  employeeId   String   @unique
+  company      String
+  designation  String
+  ctcLPA       Float
+  offerDate    DateTime
+  joinDate     DateTime?
+  location     String?
+  isVerified   Boolean  @default(false)
+  notes        String?
+
+  employee     Employee @relation(fields: [employeeId], references: [id])
+}
+
+// ── PERFORMANCE ──────────────────────────────────────────────────────────────
+
+model Performance {
+  id           String   @id @default(cuid())
+  employeeId   String
+  quarter      Int      // 1-4
+  year         Int
+  technical    Float    // 0-5
+  communication Float
+  teamwork     Float
+  delivery     Float
+  initiative   Float
+  overall      Float
+  feedback     String?
+  reviewedBy   String
+  reviewedAt   DateTime @default(now())
+
+  employee     Employee @relation(fields: [employeeId], references: [id])
+
+  @@unique([employeeId, quarter, year])
+}
+
+// ── COMPANY SETTINGS ─────────────────────────────────────────────────────────
+
+model CompanySettings {
+  id           String   @id @default("singleton")
+  name         String   @default("YUGAMCLOUD.ai")
+  website      String   @default("https://yugamcloud.com")
+  email        String   @default("hr@yugamcloud.com")
+  phone        String?
+  address      String?
+  logo         String?
+  pfRate       Float    @default(12.0)
+  esiRate      Float    @default(0.75)
+  profTaxSlabs Json?
+  holidays     Json?
+  updatedAt    DateTime @updatedAt
+}
