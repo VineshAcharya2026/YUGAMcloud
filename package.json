@@ -4,11 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "opennextjs-cloudflare build --openNextConfigPath ./open-next.cloudflare.config.ts",
+    "build:next": "next build",
     "build:cf": "opennextjs-cloudflare build --openNextConfigPath ./open-next.cloudflare.config.ts",
-    "preview": "opennextjs-cloudflare build --openNextConfigPath ./open-next.cloudflare.config.ts && opennextjs-cloudflare preview",
-    "deploy": "opennextjs-cloudflare build --openNextConfigPath ./open-next.cloudflare.config.ts && opennextjs-cloudflare deploy",
-    "cf-typegen": "wrangler types --config wrangler.types.jsonc --env-interface CloudflareEnv cloudflare-env.d.ts",
+    "preview": "npm run build && opennextjs-cloudflare preview",
+    "deploy": "npm run build && opennextjs-cloudflare deploy",
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
     "start": "next start",
     "lint": "eslint"
   },
